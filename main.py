@@ -137,7 +137,10 @@ def solve(sql):
     # print('related_tables : ', related_tables)
     # print('selection : ', selections)
     # print('joins : ', joins)
-    return 1
+    ans = 1
+    for alias, table_name in related_tables.items():
+        ans *= tables[table_name].row_number / tables[table_name].select(selections[alias])
+    return round(ans)
 
 
 if __name__ == '__main__':
