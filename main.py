@@ -1,8 +1,26 @@
 import sqlparse
 import pdb
+import pandas as pd
+import time
 from collections import defaultdict
+from scipy.stats import gaussian_kde
+from table import Table
+import matplotlib.pyplot as plt
 
-tables = {}
+tables = defaultdict(Table)
+is_int = {}
+data_index = {}
+int_index = {}
+int_columns = defaultdict(list)
+
+start_time = time.time()
+
+
+def record_time(message):
+    global start_time
+    end_time = time.time()
+    print(f"{message} : {round(end_time - start_time, 3)}s")
+    start_time = time.time()
 
 
 def init():
@@ -19,15 +37,15 @@ def init():
                         # print(column_name)
                     if type(tk) == sqlparse.sql.IdentifierList:
                         for id in tk.get_identifiers():
-                            if type(id) == sqlparse.sql.Identifier:
+                            if type(id) == sqlparse.sql.Identifier or id.value in ['link', 'role']:
                                 column_name = id.value
                     # print('TAT', tk.value)
                     if tk.value == 'integer':
                         column_list.append((column_name, int))
                     if tk.value == 'character':
                         column_list.append((column_name, str))
-        tables[table_name] = column_list
-    # print(tables)
+        tables[table_name] = Table(table_name, column_list)
+        record_time(f'init table {table_name}')
 
 
 def solve(sql):
@@ -35,8 +53,6 @@ def solve(sql):
     related_tables = {}
     selections = {}
     joins = []
-    between_count = 0
-    between_lower = 0
     for token in sql.tokens:
         if type(token) == sqlparse.sql.IdentifierList:
             # 多张表名
@@ -125,12 +141,18 @@ def solve(sql):
 
 
 if __name__ == '__main__':
-    init()
-    for sql_file in ['easy', 'middle', 'hard']:
+    # init()
+    record_time('Init all things')
+    data = {}
+    for sql_file in ['easy', 'hard', 'middle']:
         raw = open(f'input/{sql_file}.sql').read()
-        sqls = sqlparse.split(raw)
-        ground_true = open(f'answer/{sql_file}.normal').readlines()
-        for sql, truth in zip(sqls, ground_true):
+        sql_stats = sqlparse.split(raw)
+        ground_true = list(map(int, open(f'answer/{sql_file}.normal').readlines()))
+        scores = []
+        for sql, truth in zip(sql_stats, ground_true):
             predict = solve(sql)
-            # break
-            # print(sql, truth)
+            score = max(predict, truth) / (min(predict, truth) + 0.1)
+            scores.append(score)
+        record_time(f'Estimate {sql_file}')
+        df = pd.DataFrame(data={sql_file: scores})
+        print(df.describe())
