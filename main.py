@@ -45,7 +45,7 @@ def init():
                     if tk.value == 'character':
                         column_list.append((column_name, str))
         tables[table_name] = Table(table_name, column_list)
-        record_time(f'init table {table_name}')
+        # record_time(f'init table {table_name}')
 
 
 def solve(sql):
@@ -139,12 +139,12 @@ def solve(sql):
     # print('joins : ', joins)
     ans = 1
     for alias, table_name in related_tables.items():
-        ans *= tables[table_name].row_number / tables[table_name].select(selections[alias])
+        ans *= tables[table_name].row_number * tables[table_name].select(selections[alias])
     return round(ans)
 
 
 if __name__ == '__main__':
-    # init()
+    init()
     record_time('Init all things')
     data = {}
     for sql_file in ['easy', 'hard', 'middle']:
@@ -152,10 +152,13 @@ if __name__ == '__main__':
         sql_stats = sqlparse.split(raw)
         ground_true = list(map(int, open(f'answer/{sql_file}.normal').readlines()))
         scores = []
+        results = []
         for sql, truth in zip(sql_stats, ground_true):
             predict = solve(sql)
-            score = max(predict, truth) / (min(predict, truth) + 0.1)
+            score = round(max(predict, truth) / (min(predict, truth) + 0.1), 3)
             scores.append(score)
+            results.append(predict)
         record_time(f'Estimate {sql_file}')
-        df = pd.DataFrame(data={sql_file: scores})
+        df = pd.DataFrame(data={sql_file: scores, 'predict': results, 'truth': ground_true})
+        df.to_csv(f'output/{sql_file}.csv', index=False)
         print(df.describe())

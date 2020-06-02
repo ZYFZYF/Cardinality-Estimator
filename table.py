@@ -1,6 +1,8 @@
 import pandas as pd
+import json
 
 SINGLE_SAMPLE_SIZE = 10000
+RE_SAMPLE = False
 
 
 class Table:
@@ -14,9 +16,16 @@ class Table:
         self.columns = [column[0] for column in column_list]
         self.column_ind = {column: ind for ind, column in enumerate(self.columns)}
         self.int_columns = [column[0] for column in column_list if column[1] == int]
-        df = pd.read_csv(f'data/{table_name}.csv', names=self.columns)
-        self.sample_values = df.sample(n=min(len(df), SINGLE_SAMPLE_SIZE)).values
-        self.row_number = len(df)
+        if RE_SAMPLE:
+            df = pd.read_csv(f'data/{table_name}.csv', names=self.columns)
+            sample_values = df.sample(n=min(len(df), SINGLE_SAMPLE_SIZE)).values.tolist()
+            data = {'sample_values': sample_values, 'row_number': len(df)}
+            with open(f'sample/{table_name}.json', 'w') as f:
+                json.dump(data, f)
+        with open(f'sample/{table_name}.json', 'r') as f:
+            data = json.load(f)
+            self.sample_values = data['sample_values']
+            self.row_number = data['row_number']
 
     def satisfy(self, row, selections):
         for column in selections.keys():
