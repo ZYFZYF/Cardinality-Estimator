@@ -137,17 +137,49 @@ def solve(sql):
     # print('related_tables : ', related_tables)
     # print('selection : ', selections)
     # print('joins : ', joins)
-    ans = 1
-    for alias, table_name in related_tables.items():
-        ans *= tables[table_name].row_number * tables[table_name].select(selections[alias])
-    return round(ans)
+    # 从joins关系找出等价类
+    father = {}
+
+    def get_father(x):
+        if father[x] == x:
+            return x
+        else:
+            y = get_father(father[x])
+            father[x] = y
+            return y
+
+    def union(x, y):
+        father[get_father(x)] = get_father(y)
+
+    join_attrs = []
+    for join in joins:
+        father[join[0]] = join[0]
+        father[join[1]] = join[1]
+        join_attrs.extend([join[0], join[1]])
+    for join in joins:
+        union(join[0], join[1])
+
+    equal_class = defaultdict(list)
+    join_attrs = set(join_attrs)
+    for attr in join_attrs:
+        equal_class[get_father(attr)].append(attr)
+    for ind, v in enumerate(equal_class.values()):
+        print(ind, v)
+
+    # 计算U数组，每个表被在join attr里的个数
+    U = defaultdict(int)
+    for attr in join_attrs:
+        U[attr[0]] += 1
+    for k, v in U.items():
+        print(k, v)
+    return 1
 
 
 if __name__ == '__main__':
     init()
     record_time('Init all things')
     data = {}
-    for sql_file in ['easy', 'hard', 'middle']:
+    for sql_file in ['hard']:  # , 'middle','easy']:
         raw = open(f'input/{sql_file}.sql').read()
         sql_stats = sqlparse.split(raw)
         ground_true = list(map(int, open(f'answer/{sql_file}.normal').readlines()))
