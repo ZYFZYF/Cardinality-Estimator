@@ -51,8 +51,47 @@ def init():
         # record_time(f'init table {table_name}')
 
 
-def solve(sql):
-    sql = sqlparse.parse(sql)[0]
+def aggregate_column():
+    all_joins = []
+    for file in ['easy', 'middle', 'hard']:
+        for query in sqlparse.split(open(f'input/{file}.sql').read())[:-1]:
+            alias_to_table, _, joins = parse(query)
+            joins = [((alias_to_table[join[0][0]], join[0][1]), (alias_to_table[join[1][0]], join[1][1])) for join in
+                     joins]
+            all_joins.extend(joins)
+
+    attrs = list(set([join[0] for join in all_joins] + [join[1] for join in all_joins]))
+    # 从joins关系找出等价类
+    father = {attr: attr for attr in attrs}
+
+    def get_father(x):
+        if father[x] == x:
+            return x
+        else:
+            y = get_father(father[x])
+            father[x] = y
+            return y
+
+    def union(x, y):
+        father[get_father(x)] = get_father(y)
+
+    for join in all_joins:
+        union(join[0], join[1])
+
+    aggregate_clusters = defaultdict(list)
+    for attr in attrs:
+        aggregate_clusters[get_father(attr)].append(attr)
+    for k, v in aggregate_clusters.items():
+        print(k, v)
+    # 为每个等价类制定一个hash函数
+    H = {}
+    for k in aggregate_clusters.keys():
+        MOD = 1000000007
+        H[k] = (random.randint(1, MOD), random.randint(1, MOD), MOD)
+
+
+def parse(query_sql):
+    sql = sqlparse.parse(query_sql)[0]
     alias_to_table = {}
     selections = {}
     joins = []
@@ -140,19 +179,11 @@ def solve(sql):
     # print('related_tables : ', related_tables)
     # print('selection : ', selections)
     # print('joins : ', joins)
-    # 从joins关系找出等价类
-    father = {}
+    return alias_to_table, selections, joins
 
-    def get_father(x):
-        if father[x] == x:
-            return x
-        else:
-            y = get_father(father[x])
-            father[x] = y
-            return y
 
-    def union(x, y):
-        father[get_father(x)] = get_father(y)
+def solve(sql):
+    alias_to_table, selections, joins = parse(sql)
 
     join_attrs = []
     for join in joins:
@@ -203,11 +234,6 @@ def solve(sql):
         print(alias, U[alias], P[alias], tables[alias_to_table[alias]].row_number,
               round(tables[alias_to_table[alias]].row_number * P[alias]))
 
-    # 为每个等价类制定一个hash函数
-    H = {}
-    for eq_cls in equal_class.keys():
-        MOD = 1000000007
-        H[eq_cls] = (random.randint(1, MOD), random.randint(1, MOD), MOD)
     # 采样得到Samples
     S = defaultdict(list)
     for alias in join_tables:
@@ -237,42 +263,61 @@ def solve(sql):
         record_time(f'Sample {alias} finished, sample {len(S[alias])} rows')
 
     # 得到采样之后join的结果大小 J
-    compare_columns = defaultdict(list)
-    for join in joins:
-        compare_columns[join[0]].append(join[1])
-        compare_columns[join[1]].append(join[0])
-
     global J
     J = 0
-    row = {}
-
-    def dfs(ind):
-        if ind == len(join_tables):
-            global J
-            J += 1
-            return
-        alias = join_tables[ind]
+    # 如果是单表select的话，直接采样即可
+    if len(joins) == 0:
+        alias = alias_to_table.keys()[0]
         table = alias_to_table[alias]
         for value in S[alias]:
             if tables[table].satisfy(value, selections[alias]):
-                flag = True
-                for attr in u[alias]:
-                    for compare_column in compare_columns[(alias, attr)]:
-                        if compare_column in row.keys():
-                            if value[tables[table].column_ind[attr]] != row[compare_column]:
-                                flag = False
-                                break
-                    if not flag:
-                        break
-                if flag:
-                    for attr in u[alias]:
-                        row[(alias, attr)] = value[tables[table].column_ind[attr]]
-                    dfs(ind + 1)
-        for attr in u[alias]:
-            if (alias, attr) in row.keys():
-                row.pop((alias, attr))
+                J += 1
+    # 如果是双表join的话，直接用桶即可
+    elif len(joins) == 2:
+        Count = {alias: defaultdict(int) for alias in join_tables}
+        for alias in join_tables:
+            table = alias_to_table[alias]
+            for value in S[alias]:
+                if tables[table].satisfy(value, selections[alias]):
+                    Count[alias][value[tables[table].column_ind[attr]]] += 1
+        for v in Count[join_tables[0]].values():
+            J += Count[join_tables[0]][v] * Count[join_tables[1]][v]
+    else:
+        return 1
+        compare_columns = defaultdict(list)
+        for join in joins:
+            compare_columns[join[0]].append(join[1])
+            compare_columns[join[1]].append(join[0])
 
-    dfs(0)
+        row = {}
+
+        def dfs(ind):
+            if ind == len(join_tables):
+                global J
+                J += 1
+                return
+            alias = join_tables[ind]
+            table = alias_to_table[alias]
+            for value in S[alias]:
+                if tables[table].satisfy(value, selections[alias]):
+                    flag = True
+                    for attr in u[alias]:
+                        for compare_column in compare_columns[(alias, attr)]:
+                            if compare_column in row.keys():
+                                if value[tables[table].column_ind[attr]] != row[compare_column]:
+                                    flag = False
+                                    break
+                        if not flag:
+                            break
+                    if flag:
+                        for attr in u[alias]:
+                            row[(alias, attr)] = value[tables[table].column_ind[attr]]
+                        dfs(ind + 1)
+            for attr in u[alias]:
+                if (alias, attr) in row.keys():
+                    row.pop((alias, attr))
+
+        dfs(0)
     print(f'Sample join answer is {J}')
     # 计算得到Pinc
     Pinc = 1
@@ -288,8 +333,9 @@ def solve(sql):
 if __name__ == '__main__':
     init()
     record_time('Init all things')
+    aggregate_column()
     data = {}
-    for sql_file in ['test']:  # 'middle','easy']:
+    for sql_file in []:
         raw = open(f'input/{sql_file}.sql').read()
         sql_stats = sqlparse.split(raw)
         ground_true = list(map(int, open(f'answer/{sql_file}.normal').readlines()))

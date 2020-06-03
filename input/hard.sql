@@ -140,7 +140,7 @@ WHERE it1.info = 'countries'
   AND it2.id = mi_idx.info_type_id;
 
 SELECT *
-FROM aka_title AS AT,
+FROM aka_title AS at,
      company_name AS cn,
      company_type AS ct,
      info_type AS it1,
