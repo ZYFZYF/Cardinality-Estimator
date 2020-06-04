@@ -2,7 +2,7 @@ import pandas as pd
 import json
 from collections import defaultdict
 
-SAMPLE_SIZE = ['10000', '5000', '2500', '1000', '500', '200', '100']
+SAMPLE_SIZE = ['1000000', '10000', '5000', '2500', '1000', '500', '200', '100', '50', '10']
 RE_SAMPLE = False
 
 
@@ -15,6 +15,7 @@ class Table:
         self.columns = [column[0] for column in column_list]
         self.column_ind = {column: ind for ind, column in enumerate(self.columns)}
         self.int_columns = [column[0] for column in column_list if column[1] == int]
+        self.table_name = table_name
         for attr in join_attrs[table_name]:
             if father[(table_name, attr)] not in [('movie_companies', 'company_type_id'),
                                                   ('person_info', 'info_type_id'),
@@ -72,7 +73,9 @@ class Table:
             for condition in selections[column]:
                 cmp = condition[0]
                 term = condition[1]
-                if cmp == 'BETWEEM' and not (term[0] <= value <= term[1]):
+                # if self.table_name == 'movie_info_idx':
+                #     print(value, term, value == term)
+                if cmp == 'BETWEEN' and not (term[0] <= value <= term[1]):
                     return 0
                 if cmp == '<' and not (value < term):
                     return 0

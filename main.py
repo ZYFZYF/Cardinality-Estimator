@@ -229,11 +229,16 @@ def solve(sql):
         for item in join_items:
             alias, attr = item
             table = alias_to_table[alias]
+            cnt = 0
             for value in tables[table].sample_values[sample_size]:
                 if tables[table].satisfy(value, selections[alias]):
+                    cnt += 1
                     Count[alias][value[tables[table].column_ind[attr]]] += 1
+            # print(selections[alias], len(tables[table].sample_values[sample_size]), cnt)
         for v in list(Count[join_items[0][0]].keys()):
             J += Count[join_items[0][0]][v] * Count[join_items[1][0]][v]
+        # print(Count[join_items[0][0]])
+        # print(Count[join_items[1][0]])
     else:
         compare_columns = defaultdict(list)
         for join in joins:
@@ -248,19 +253,28 @@ def solve(sql):
         for sample_size in reversed(SAMPLE_SIZE):
             for alias in join_tables:
                 table = alias_to_table[alias]
+                cnt = 0
                 for value in tables[table].sample_values[sample_size]:
                     if tables[table].satisfy(value, selections[alias]):
                         S[alias][sample_size].append(value)
-                if len(S[alias][sample_size]) < 10000 ** (1.0 / len(join_tables)):
-                    alias_sample_size[alias] = sample_size
+                        cnt += 1
+                print(f'{alias} satisify {cnt} from sample size {sample_size}')
+                if len(S[alias][sample_size]) > 0:
+                    if len(S[alias][alias_sample_size[alias]]) == 0 or len(S[alias][sample_size]) < 10000 ** (
+                            1.0 / len(join_tables)):
+                        alias_sample_size[alias] = sample_size
 
         estimate_cost = 1
         for alias in join_tables:
             estimate_cost *= len(S[alias][alias_sample_size[alias]])
+        print([alias_to_table[alias] for alias in join_tables])
         print(
             f'Estimate row list is {[len(tables[alias_to_table[alias]].sample_values[alias_sample_size[alias]]) for alias in join_tables]} and select result is {[len(S[alias][alias_sample_size[alias]]) for alias in join_tables]} and total cost is {estimate_cost}')
+        start = time.time()
 
         def dfs(ind):
+            if time.time() - start > 10:
+                return
             if ind == len(join_tables):
                 global J
                 J += 1
@@ -285,7 +299,27 @@ def solve(sql):
                 if (alias, attr) in row.keys():
                     row.pop((alias, attr))
 
-        dfs(0)
+        while True:
+            dfs(0)
+            if J == 0:
+                mi_cnt = 100000000
+                mi_alias = ''
+                for alias in join_tables:
+                    if SAMPLE_SIZE.index(alias_sample_size[alias]) != 0 and len(
+                            S[alias][alias_sample_size[alias]]) < mi_cnt:
+                        mi_cnt = len(S[alias][alias_sample_size[alias]])
+                        mi_alias = alias
+                if mi_alias == '':
+                    break
+                alias_sample_size[mi_alias] = SAMPLE_SIZE[SAMPLE_SIZE.index(alias_sample_size[mi_alias]) - 1]
+                estimate_cost = 1
+                for alias in join_tables:
+                    estimate_cost *= len(S[alias][alias_sample_size[alias]])
+                print(
+                    f'Configure sample size is {[alias_sample_size[alias] for alias in join_tables]}, row list is {[len(tables[alias_to_table[alias]].sample_values[alias_sample_size[alias]]) for alias in join_tables]} and select result is {[len(S[alias][alias_sample_size[alias]]) for alias in join_tables]} and total cost is {estimate_cost}')
+            else:
+                break
+
     print(f'{index}: Sample join answer is {J}, having {len(joins)} joins')
     # 计算得到Pinc
 
@@ -300,17 +334,18 @@ def solve(sql):
                     print(attr[0], attr[1], table, tables[table].U)
                     mi = min(mi, tables[table].P[alias_sample_size[attr[0]]] ** (1.0 / tables[table].U))
             Pinc *= mi
+        print(J, Pinc, J / Pinc)
     else:
         alias = list(alias_to_table.keys())[0]
         table = alias_to_table[alias]
         Pinc = tables[table].P[SAMPLE_SIZE[0]]
     if J == 0:
-        J = random.random()
+        J = 1
     return round(J / Pinc)
 
 
 def evaluate():
-    for sql_file in ['middle', 'hard']:
+    for sql_file in ['easy', 'middle', 'hard']:
         df = pd.read_csv(f'output/{sql_file}.csv')
         print(df.describe())
 
@@ -318,7 +353,7 @@ def evaluate():
 if __name__ == '__main__':
     init()
     data = {}
-    for sql_file in ['hard', 'middle', 'hard']:
+    for sql_file in ['test']:
         index = 0
         raw = open(f'input/{sql_file}.sql').read()
         sql_stats = sqlparse.split(raw)
