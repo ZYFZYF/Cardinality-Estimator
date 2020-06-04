@@ -73,8 +73,6 @@ class Table:
             for condition in selections[column]:
                 cmp = condition[0]
                 term = condition[1]
-                # if self.table_name == 'movie_info_idx':
-                #     print(value, term, value == term)
                 if cmp == 'BETWEEN' and not (term[0] <= value <= term[1]):
                     return 0
                 if cmp == '<' and not (value < term):
@@ -89,6 +87,15 @@ class Table:
                     return 0
                 if cmp == '=' and not (value == term):
                     return 0
+                if cmp == 'IN':
+                    for t in term:
+                        if value == t:
+                            return 1
+                    return 0
+                if cmp == 'LIKE':
+                    return like(value, term)
+                if cmp == 'NOT LIKE':
+                    return 1 - like(value, term)
         return 1
 
     def select(self, selections):
@@ -96,3 +103,61 @@ class Table:
         for row in self.sample_values:
             count += self.satisfy(row, selections)
         return 1.0 * count / SAMPLE_SIZE
+
+
+dp = {}
+
+
+def like(a, b):
+    global dp
+    dp = {}
+    return 1 if dfs(a, b, 0, 0) else 0
+
+
+def dfs(a, b, x, y):
+    key = (x, y)
+    if key in dp.keys():
+        return dp[key]
+    if x == len(a) and y == len(b):
+        dp[key] = True
+    elif y == len(b):
+        dp[key] = False
+    else:
+        ans = False
+        z = y + 1
+        valid_set = set()
+        if b[y] == '[':
+            while z < len(b) and b[z] != ']':
+                valid_set.add(b[z])
+                z += 1
+            z += 1
+        if b[y] == '[':
+            if x < len(a) and a[x] in valid_set:
+                # print(x, y, z, a[x], valid_set)
+                ans |= dfs(a, b, x + 1, z)
+        elif b[y] == '%':
+            ans |= dfs(a, b, x, z)
+            if x < len(a):
+                ans |= dfs(a, b, x + 1, y) or dfs(a, b, x + 1, z)
+        elif x < len(a) and a[x] == b[y]:
+            ans |= dfs(a, b, x + 1, z)
+        dp[key] = ans
+    # print(x, y, dp[key], len(a), len(b))
+    return dp[key]
+
+
+if __name__ == '__main__':
+    def test_like(a, b):
+        print(a, b, like(a, b))
+
+
+    test_like('abcdf', 'abcdf')
+    test_like('u', '[us]')
+    test_like('s', '[us]')
+    test_like('us', '[us]')
+    test_like('uu', 'u[us]u')
+    test_like('usu', 'u[us]u')
+    test_like('ccaddadsafcnsafasf', '%cn%')
+    test_like('cxxxxxxxxxxxxn', '%cn%')
+    test_like('cnxxxxxxxxxxxn', '%cn%')
+    test_like('xxxxxxxxxxxxcn', '%cn%')
