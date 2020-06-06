@@ -7,6 +7,7 @@ from scipy.stats import gaussian_kde
 from table import *
 import matplotlib.pyplot as plt
 import random
+from tqdm import tqdm
 
 tables = defaultdict(Table)
 is_int = {}
@@ -104,7 +105,6 @@ def init():
                     if tk.value == 'character':
                         column_list.append((column_name, str))
         tables[table_name] = Table(table_name, column_list, join_attrs, H, father)
-        record_time(f'Init table {table_name}')
     record_time('Finish sample tables')
 
 
@@ -258,7 +258,7 @@ def solve(sql):
                     if tables[table].satisfy(value, selections[alias]):
                         S[alias][sample_size].append(value)
                         cnt += 1
-                print(f'{alias} satisify {cnt} from sample size {sample_size}')
+                # print(f'{alias} satisify {cnt} from sample_ size {sample_size}')
                 if len(S[alias][sample_size]) > 0:
                     if len(S[alias][alias_sample_size[alias]]) == 0 or len(S[alias][sample_size]) < 10000 ** (
                             1.0 / len(join_tables)):
@@ -267,13 +267,13 @@ def solve(sql):
         estimate_cost = 1
         for alias in join_tables:
             estimate_cost *= len(S[alias][alias_sample_size[alias]])
-        print([alias_to_table[alias] for alias in join_tables])
-        print(
-            f'Estimate row list is {[len(tables[alias_to_table[alias]].sample_values[alias_sample_size[alias]]) for alias in join_tables]} and select result is {[len(S[alias][alias_sample_size[alias]]) for alias in join_tables]} and total cost is {estimate_cost}')
+        # ([alias_to_table[alias] for alias in join_tables])
+        # print(
+        #    f'Estimate row list is {[len(tables[alias_to_table[alias]].sample_values[alias_sample_size[alias]]) for alias in join_tables]} and select result is {[len(S[alias][alias_sample_size[alias]]) for alias in join_tables]} and total cost is {estimate_cost}')
         start = time.time()
 
         def dfs(ind):
-            if time.time() - start > 10:
+            if time.time() - start > 2:
                 return
             if ind == len(join_tables):
                 global J
@@ -282,6 +282,8 @@ def solve(sql):
             alias = join_tables[ind]
             table = alias_to_table[alias]
             for value in S[alias][alias_sample_size[alias]]:
+                if time.time() - start > 2:
+                    return
                 flag = True
                 for attr in tables[table].u:
                     for compare_column in compare_columns[(alias, attr)]:
@@ -315,12 +317,13 @@ def solve(sql):
                 estimate_cost = 1
                 for alias in join_tables:
                     estimate_cost *= len(S[alias][alias_sample_size[alias]])
-                print(
-                    f'Configure sample size is {[alias_sample_size[alias] for alias in join_tables]}, row list is {[len(tables[alias_to_table[alias]].sample_values[alias_sample_size[alias]]) for alias in join_tables]} and select result is {[len(S[alias][alias_sample_size[alias]]) for alias in join_tables]} and total cost is {estimate_cost}')
+                # print(
+                #    f'Configure sample size is {[alias_sample_size[alias] for alias in join_tables]}, row list is {[len(tables[alias_to_table[alias]].sample_values[alias_sample_size[alias]]) for alias in join_tables]} and select result is {[len(S[alias][alias_sample_size[alias]]) for alias in join_tables]} and total cost is {estimate_cost}')
             else:
                 break
-
-    print(f'{index}: Sample join answer is {J}, having {len(joins)} joins')
+            if time.time() - start > 2:
+                break
+    # print(f'{index}: Sample join answer is {J}, having {len(joins)} joins')
     # 计算得到Pinc
 
     Pinc = 1
@@ -331,16 +334,16 @@ def solve(sql):
             for attr in join_items:
                 table = alias_to_table[attr[0]]
                 if father[(table, attr[1])] == eq_cls:
-                    print(attr[0], attr[1], table, tables[table].U)
+                    # print(attr[0], attr[1], table, tables[table].U)
                     mi = min(mi, tables[table].P[alias_sample_size[attr[0]]] ** (1.0 / tables[table].U))
             Pinc *= mi
-        print(J, Pinc, J / Pinc)
+        # print(J, Pinc, J / Pinc)
     else:
         alias = list(alias_to_table.keys())[0]
         table = alias_to_table[alias]
         Pinc = tables[table].P[SAMPLE_SIZE[0]]
     if J == 0:
-        J = 1
+        J = random.random()
     return round(J / Pinc)
 
 
@@ -350,17 +353,23 @@ def evaluate():
         print(df.describe())
 
 
+def output():
+    for sql_file in ['easy', 'middle', 'hard']:
+        df = pd.read_csv(f'output/{sql_file}.csv')
+        df[['predict']].to_csv(f'submit/{sql_file}', index=False, header=None)
+
+
 if __name__ == '__main__':
     init()
     data = {}
-    for sql_file in ['test']:
+    for sql_file in ['easy', 'middle', 'hard']:
         index = 0
         raw = open(f'input/{sql_file}.sql').read()
         sql_stats = sqlparse.split(raw)
         ground_true = list(map(int, open(f'answer/{sql_file}.normal').readlines()))
         scores = []
         results = []
-        for sql, truth in zip(sql_stats, ground_true):
+        for sql, truth in tqdm(zip(sql_stats, ground_true)):
             predict = solve(sql)
             score = round(max(predict, truth) / (min(predict, truth) + 0.1), 3)
             scores.append(score)

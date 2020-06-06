@@ -2,7 +2,7 @@ import pandas as pd
 import json
 from collections import defaultdict
 
-SAMPLE_SIZE = ['1000000', '10000', '5000', '2500', '1000', '500', '200', '100', '50', '10']
+SAMPLE_SIZE = ['10000', '5000', '2500', '1000', '500', '200', '100', '50', '10']
 RE_SAMPLE = False
 
 
@@ -93,9 +93,15 @@ class Table:
                             return 1
                     return 0
                 if cmp == 'LIKE':
-                    return like(value, term)
+                    if str(value) != 'nan':
+                        return like(value, term)
+                    else:
+                        return 0
                 if cmp == 'NOT LIKE':
-                    return 1 - like(value, term)
+                    if str(value) != 'nan':
+                        return 1 - like(value, term)
+                    else:
+                        return 0
         return 1
 
     def select(self, selections):
@@ -111,7 +117,11 @@ dp = {}
 def like(a, b):
     global dp
     dp = {}
-    return 1 if dfs(a, b, 0, 0) else 0
+    if dfs(a, b, 0, 0):
+        # print(a, 'like', b)
+        return 1
+    else:
+        return 0
 
 
 def dfs(a, b, x, y):
